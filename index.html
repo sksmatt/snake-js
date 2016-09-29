@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+    <meta name="viewport" content="width=device-width">
+    <title>Snake</title>
+    <style>
+        body {
+            background: #222;
+            color:#fff;
+            font:16px "Monaco";
+            text-align:center;
+            margin:10px 0;
+        }
+        #game {
+            border:0.2em solid #fff;
+            height: 85vh;
+            margin:0 auto;
+            display:block;
+        }
+    </style>
+    <script>
+    window.onload = function() {
+
+        class Vec {
+
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+
+            collides(vector) {
+                return this.x == vector.x && 
+                       this.y == vector.y;
+            }
+
+            limit(min, max) {
+                if(this.x > max) {this.x = min}
+                if(this.y > max) {this.y = min}
+                if(this.x < min)  {this.x = max}
+                if(this.y < min)  {this.y = max}
+            }
+
+        }
+
+        class Item {
+
+            constructor() {
+                this.pos = new Vec(0,0);
+                this.color = "#e8544a";
+                
+            }
+
+            position() {
+                this.pos.x = 28 * Math.random() | 0; 
+                this.pos.y = 28 * Math.random() | 0;
+            }
+
+        }
+
+        class Snake {
+
+            constructor() {
+                this.dir = 0;
+                this.last = 0;
+                this.limbs = [];
+                this.color = "#20bdef";
+            }
+
+            checkBoundaries() {
+                this.limbs.forEach(limb => limb.limit(0,28));
+            }
+
+            collides() {
+                let collision = false;
+                if(this.limbs.length > 1) {
+                    for (var i = 1; i < this.limbs.length; i++) {
+                        if(this.limbs[0].collides(this.limbs[i])) {
+                            collision = true;
+                            break;
+                        }
+                    }
+                }
+                return collision;
+            }
+
+            move() {
+                let head = this.head;
+                if(this.dir == 1) {
+                    head.y++;
+                } else if (this.dir == 2) {
+                    head.y--;
+                } else if (this.dir == 3) {
+                    head.x--;
+                } else if (this.dir == 4) {
+                    head.x++;
+                }
+                this.limbs.unshift(head);
+            }
+
+            moving() {
+                return this.dir > 0;
+            }
+
+            preventBackwardsMovement() {
+                if((this.dir == 1 && this.last == 2) ||
+                     (this.dir == 2 && this.last == 1) ||
+                     (this.dir == 3 && this.last == 4) ||
+                     (this.dir == 4 && this.last == 3) ) {
+                    this.dir = this.last;
+                }
+                this.last = this.dir;
+            }
+
+            removeTail() {
+                this.limbs.pop();
+            }
+
+            reset() {
+                this.dir = this.last = 0;
+                this.limbs = [new Vec(14, 14)];
+            }
+
+            set direction(value) {
+                this.dir = value;
+                if(this.last == 0) {
+                    this.last = this.dir;
+                }
+            }
+
+            get head() {
+                return new Vec(this.limbs[0].x, this.limbs[0].y);
+            }
+
+        }
+
+        class Game {
+
+            constructor(canvas, scoring) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext("2d");
+                this.ctx.scale(10,10);
+
+                this.scoring = scoring;
+                this.score = this.acc = this.lastTime = 0;
+                this.increase = 10;
+                this.step = 1/10;
+
+                this.snake = new Snake();
+                this.item = new Item();
+
+                this.loop = this.loop.bind(this);
+                this.run();
+            }
+
+            draw() {
+                this.ctx.fillStyle = "#000";
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.snake.limbs.forEach(limb => this.drawSquare(limb, this.snake.color));
+
+                if(this.snake.moving()) {
+                    this.drawSquare(this.item.pos, this.item.color);
+                }
+            }
+
+        drawSquare(vec, color) {
+            this.ctx.fillStyle = color;
+            this.ctx.fillRect(vec.x,vec.y,1,1);
+        }
+
+        input() {
+            document.addEventListener('keydown', e => {
+                 if(e.keyCode == 40 || e.keyCode == 83){
+                     this.snake.direction = 1; // down
+                 } else if(e.keyCode == 38 || e.keyCode == 90 || e.keyCode == 87){
+                     this.snake.direction = 2; // up
+                 } else if(e.keyCode == 37 || e.keyCode == 65 || e.keyCode == 81){
+                     this.snake.direction = 3; // left
+                 } else if(e.keyCode == 39 || e.keyCode == 68){
+                     this.snake.direction = 4; // right
+                }
+             });
+        }
+
+        loop(time) {
+            if(this.lastTime) {
+                this.update((time - this.lastTime) / 1000);
+                this.draw();
+            }
+            this.lastTime = time;
+            window.requestAnimationFrame(this.loop);
+        }
+
+        reset() {
+            this.scoring.innerHTML = this.score = 0
+            this.snake.reset();
+            this.item.position();
+        }
+
+        run() {
+            this.reset();
+            this.input();  
+            this.loop();
+        }
+
+        simulate() {
+             if(this.snake.moving()) {
+
+                this.snake.preventBackwardsMovement();
+                
+                this.snake.move();
+
+                if(this.snake.head.collides(this.item.pos)) {
+                    this.item.position();
+                    this.updateScore();
+                    this.updateSpeed();
+                } else {
+                    this.snake.removeTail();
+                }
+
+                this.snake.checkBoundaries();
+                
+                if(this.snake.collides()) {
+                    this.reset();
+                }
+
+            } 
+        }
+
+        update(dt) {
+            this.acc += dt;
+            while(this.acc > this.step) {
+                this.simulate();
+                this.acc -= this.step;
+            }
+        }
+
+        updateScore() {
+            this.scoring.innerHTML = ++this.score * 10;
+        }
+
+        updateSpeed() {
+            if(this.score % 2 === true) {
+                this.increase += 0.5;
+                this.step = 1 / this.increase;
+             }
+        }
+
+    }
+
+    new Game(game, scoring);
+
+    };
+    </script>
+
+    <div id="scoring">0</div>
+    <canvas id="game" width="290px" height="290px"/>
